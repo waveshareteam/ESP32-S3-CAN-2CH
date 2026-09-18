@@ -1,0 +1,180 @@
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>ESP32-S3-CAN-2CH</title>
+  <style>
+    body { font-family: Arial, sans-serif; background-color: #f0f0f0; margin: 0; padding: 0; }
+    .header { text-align: center; padding: 20px 0; background-color: #333; color: #fff; margin-bottom: 20px; }
+    .container { max-width: 600px; margin: 10px auto; padding: 20px; background-color: #fff; border-radius: 5px; box-shadow: 0 0 5px rgba(0, 0, 0, 0.3); }
+    .form-group label { display: block; font-weight: bold; margin-top: 10px; }
+    input, select, textarea { margin: 4px 0 10px; padding: 5px; border: 1px solid #ccc; border-radius: 3px; }
+    textarea { width: 500px; height: 100px; resize: vertical; word-break: break-word; }
+    .btn { padding: 5px 10px; background-color: #333; color: #fff; font-size: 14px; font-weight: bold; border: none; border-radius: 3px; cursor: pointer; }
+    .btn:disabled { background-color: #777; cursor: wait; }
+    .receive-title { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+    .receive-title label { margin-top: 0; }
+    nav { margin: 15px 0; text-align: center; }
+    nav a { padding: 10px 50px; background-color: #333; color: white; text-decoration: none; font-weight: bold; border-radius: 5px; }
+    nav a.SerialControlActive { background-color: #fff; color: #333; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.1); transform: translateY(-4px); transition: all 0.2s ease-in-out; }
+    .wide { width: 500px; }
+  </style>
+</head>
+<body>
+  <script>
+    function formatHexInput(input) {
+      var raw = input.value.replace(/[^0-9a-fA-F]/g, '');
+      var spaced = raw.match(/.{1,2}/g);
+      input.value = spaced ? spaced.join(' ') : '';
+    }
+    var requestBusy = {};
+    var readBusy = {};
+    function sendRequest(path, payload, button) {
+      if (requestBusy[path]) return;
+      requestBusy[path] = true;
+      if (button) button.disabled = true;
+      var xhr = new XMLHttpRequest();
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+          requestBusy[path] = false;
+          if (button) button.disabled = false;
+        }
+      };
+      xhr.onerror = function() {
+        requestBusy[path] = false;
+        if (button) button.disabled = false;
+      };
+      xhr.open('GET', path + '?data=' + encodeURIComponent(payload), true);
+      xhr.send();
+    }
+    function setRate(selectId, path, button) {
+      var rate = document.getElementById(selectId).value;
+      if (path === '/CANSetAllRate') {
+        document.getElementById('CAN2Rate').value = rate;
+        document.getElementById('CANUpdateRate').value = rate;
+      }
+      sendRequest(path, 'CAN Rate: ' + rate + '  \nWeb End\n', button);
+    }
+    function sendCan(idPrefix, dataId, path, button) {
+      var canID = document.getElementById(idPrefix + 'id').value;
+      var canExtd = document.getElementById(idPrefix + 'extd').value;
+      var canData = document.getElementById(dataId).value;
+      var payload =
+        'CAN ID: 0x' + canID.toUpperCase() + '  \n' +
+        'CAN Extd: ' + canExtd + '  \n' +
+        'CAN Data: ' + canData + '  \n' +
+        'Web End\n';
+      sendRequest(path, payload, button);
+    }
+    function readCan(path, textAreaId) {
+      if (readBusy[path]) return;
+      readBusy[path] = true;
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', path + '?_=' + Date.now(), true);
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) readBusy[path] = false;
+        if (xhr.readyState === 4 && xhr.status === 200) {
+          var dataArray = JSON.parse(xhr.responseText);
+          if (dataArray.length > 0 && dataArray[0] !== '') {
+            var textarea = document.getElementById(textAreaId);
+            var isAtBottom = (textarea.scrollHeight - textarea.scrollTop - textarea.clientHeight) < 10;
+            textarea.value += dataArray[0];
+            if (isAtBottom) textarea.scrollTop = textarea.scrollHeight;
+          }
+        }
+      };
+      xhr.onerror = function() { readBusy[path] = false; };
+      xhr.send();
+    }
+    function clearCanLog(textAreaId, path) {
+      document.getElementById(textAreaId).value = '';
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', path + '?_=' + Date.now(), true);
+      xhr.send();
+    }
+    function readConfig() {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', '/getRateConfig?_=' + Date.now(), true);
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4 && xhr.status === 200) {
+          var data = JSON.parse(xhr.responseText);
+          if (data.can2_rate !== undefined) document.getElementById('CAN2Rate').value = data.can2_rate;
+          if (data.can_rate !== undefined) document.getElementById('CANUpdateRate').value = data.can_rate;
+        }
+      };
+      xhr.send();
+    }
+    window.addEventListener('load', function() {
+      readConfig();
+      setInterval(function(){ readCan('/getCAN2Data', 'CAN2ReadData'); }, 500);
+      setInterval(function(){ readCan('/getCANData', 'CANReadData'); }, 500);
+    });
+  </script>
+  <div class="header"><h1>ESP32-S3-CAN-2CH</h1></div>
+  <nav>
+    <a href="/" id="SerialControlLink" class="SerialControlActive">Serial Control</a>
+    <a href="/RTC_Event" id="rtcEventLink" class="rtcEventActive">RTC Event</a>
+  </nav>
+  <div class="container">
+    <div class="form-group">
+      <label>CAN CH1 (ESP32-S3 TWAI):</label>
+      <select id="CANUpdateRate" style="width: 120px; text-align: left;">
+        <option value="25">25Kbps</option>
+        <option value="50">50Kbps</option>
+        <option value="100">100Kbps</option>
+        <option value="125">125Kbps</option>
+        <option value="250">250Kbps</option>
+        <option value="500">500Kbps</option>
+        <option value="800">800Kbps</option>
+        <option value="1000">1Mbps</option>
+      </select>
+      <button class="btn" onclick="setRate('CANUpdateRate', '/CANSetRate', this)">Set Rate</button>
+      <button class="btn" onclick="setRate('CANUpdateRate', '/CANSetAllRate', this)">Set Both Rate</button>
+      <label>CAN CH1 Send Data:</label>
+      <span>CAN ID : 0x</span>
+      <input type="text" id="CANid" style="width: 160px; text-align: left;" value="00000000">
+      <select id="CANextd" style="width: 200px; text-align: left;">
+        <option value="0">Standard frames</option>
+        <option value="1">Extended frames</option>
+      </select>
+      <input type="text" id="CANSendData" class="wide" value="12" oninput="formatHexInput(this)">
+      <button class="btn" onclick="sendCan('CAN', 'CANSendData', '/CANSend', this)">Send Data</button>
+      <div class="receive-title">
+        <label>CAN CH1 Receive Data:</label>
+        <button class="btn" onclick="clearCanLog('CANReadData', '/clearCANData')">Clear Log</button>
+      </div>
+      <textarea id="CANReadData" placeholder="No data was received..."></textarea>
+    </div>
+  </div>
+  <div class="container">
+    <div class="form-group">
+      <label>CAN CH2 (XL2515):</label>
+      <select id="CAN2Rate" style="width: 120px; text-align: left;">
+        <option value="25">25Kbps</option>
+        <option value="50">50Kbps</option>
+        <option value="100">100Kbps</option>
+        <option value="125">125Kbps</option>
+        <option value="250">250Kbps</option>
+        <option value="500">500Kbps</option>
+        <option value="800">800Kbps</option>
+        <option value="1000">1Mbps</option>
+      </select>
+      <button class="btn" onclick="setRate('CAN2Rate', '/CAN2SetRate', this)">Set Rate</button>
+      <button class="btn" onclick="setRate('CAN2Rate', '/CANSetAllRate', this)">Set Both Rate</button>
+      <label>CAN CH2 Send Data:</label>
+      <span>CAN ID : 0x</span>
+      <input type="text" id="CAN2id" style="width: 160px; text-align: left;" value="00000000">
+      <select id="CAN2extd" style="width: 200px; text-align: left;">
+        <option value="0">Standard frames</option>
+        <option value="1">Extended frames</option>
+      </select>
+      <input type="text" id="CAN2SendData" class="wide" value="12" oninput="formatHexInput(this)">
+      <button class="btn" onclick="sendCan('CAN2', 'CAN2SendData', '/CAN2Send', this)">Send Data</button>
+      <div class="receive-title">
+        <label>CAN CH2 Receive Data:</label>
+        <button class="btn" onclick="clearCanLog('CAN2ReadData', '/clearCAN2Data')">Clear Log</button>
+      </div>
+      <textarea id="CAN2ReadData" placeholder="No data was received..."></textarea>
+    </div>
+  </div>
+</body>
+</html>

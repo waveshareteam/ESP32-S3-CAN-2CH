@@ -1,0 +1,263 @@
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>ESP32-S3-CAN-2CH</title>
+  <style>
+    body { font-family: Arial, sans-serif; background-color: #f0f0f0; margin: 0; padding: 0; }
+    .header { text-align: center; padding: 20px 0; background-color: #333; color: #fff; margin-bottom: 20px; }
+    .container { max-width: 600px; margin: 10px auto; padding: 20px; background-color: #fff; border-radius: 5px; box-shadow: 0 0 5px rgba(0, 0, 0, 0.3); }
+    .form-group { margin-bottom: 15px; }
+    .form-group label { display: block; font-weight: bold; }
+    .form-group input { width: 80px; height: 25px; padding: 4px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; text-align: right; }
+    .form-group select { width: 80px; height: 25px; padding: 4px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; text-align: right; }
+    .form-group .btn { padding: 10px 20px; background-color: #333; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    .form-group .btn:hover { background-color: #555; }
+    .Events { font-size: 13px; word-wrap: break-word; overflow-wrap: break-word; max-width: 100%; white-space: nowrap; padding: 2px; }
+    .Events button { float: right; margin-left: 1px; }
+    .Events li { font-size: 13px; }
+    nav { margin: 15px 0; text-align: center; }
+    nav a { padding: 10px 50px; background-color: #333; color: white; text-decoration: none; font-weight: bold; border-radius: 5px; }
+    nav a.rtcEventActive { background-color: #fff; color: #333; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.1); transform: translateY(-4px); transition: all 0.2s ease-in-out; }
+  </style>
+</head>
+<body>
+  <script defer="defer">
+    function getRtcEventData() {
+      var dateBox1 = document.getElementById('DateBox1').value;
+      var dateBox2 = document.getElementById('DateBox2').value;
+      var dateBox3 = document.getElementById('DateBox3').value;
+      var week = document.getElementById('Week').value;
+      var timeBox1 = document.getElementById('TimeBox1').value;
+      var timeBox2 = document.getElementById('TimeBox2').value;
+      var timeBox3 = document.getElementById('TimeBox3').value;
+      var serialPort = document.getElementById('SerialPort').value;
+      var canID = document.getElementById('CANid').value;
+      var canExtd = document.getElementById('CANextd').value;
+      var serialData = document.getElementById('SerialData').value;
+      var dataType = document.getElementById('DataType').value;
+      var cycleDuration = document.getElementById('CycleDuration').value;
+      var cycleBox = document.getElementById('CycleBox1').value;
+      var WebData =
+        'Date: ' + dateBox1 + '/' + dateBox2 + '/' + dateBox3 + '  ' + '\n' +
+        'Week: ' + week + '  ' + '\n' +
+        'Time: ' + timeBox1 + ':' + timeBox2 + ':' + timeBox3 + '  ' + '\n' +
+        'Serial Port: ' + serialPort + '  ' + '\n' +
+        'CAN ID: ' + '0x' + canID.toUpperCase() + '  ' + '\n' +
+        'CAN Extd: ' + canExtd + '  ' + '\n' +
+        'Serial Data: ' + serialData + '  ' + '\n' +
+        'Web End' + '\n' +
+        'Data Type: ' + dataType + '  ' + '\n' +
+        'Cycle Duration: ' + cycleDuration + '  ' + '\n' +
+        'Cycle: ' + cycleBox + '  ' + '\n';
+      var xhr = new XMLHttpRequest();
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+          if (xhr.status === 200 && xhr.responseText === 'OK') {
+            upTime();
+          } else {
+            alert('New event failed');
+          }
+        }
+      };
+      xhr.open('GET', '/NewEvent?data=' + encodeURIComponent(WebData) + '&_=' + Date.now(), true);
+      xhr.send();
+    }
+    function handleSerialInput(input) {
+      const dataType = document.getElementById('DataType').value;
+      if (dataType === '1') {
+        let raw = input.value.replace(/[^0-9a-fA-F]/g, '');
+        let spaced = raw.match(/.{1,2}/g);
+        input.value = spaced ? spaced.join(' ') : '';
+      }
+    }
+    function deleteEvent(eventId) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', '/DeleteEvent?id=' + eventId, true);
+      xhr.send();
+    }
+    function updateList(data) {
+      var list = document.getElementById('myList');
+      list.innerHTML = '';
+      for (let i = 0; i < data.eventCount; i++) {
+        var newItem = document.createElement('li');
+        var eventContent = data['eventStr' + (i + 1)].replace(/\n/g, '<br>');
+        newItem.innerHTML = eventContent;
+        var eventButton = document.createElement('button');
+        eventButton.textContent = 'Delete' + 'Event' + (i + 1);
+        eventButton.onclick = function() { deleteEvent(i + 1); };
+        newItem.style.display = 'flex';
+        newItem.style.justifyContent = 'space-between';
+        newItem.style.alignItems = 'center';
+        newItem.appendChild(eventButton);
+        list.appendChild(newItem);
+      }
+    }
+    function upTime() {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', '/getTimeAndEvent', true);
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4 && xhr.status === 200) {
+          var data = JSON.parse(xhr.responseText);
+          document.getElementById('Time').textContent = data.time;
+          updateList(data);
+        }
+      };
+      xhr.send();
+    }
+    function toggleCANFrame() {
+      var canFrameDiv = document.getElementById('CANFrame');
+      var dataTypeDiv = document.getElementById('DataType');
+      canFrameDiv.style.display = 'block';
+      dataTypeDiv.value = '1';
+      dataTypeDiv.disabled = true;
+    }
+    function UpDataRtcTime() {
+      var WebData =
+        'Date: ' + document.getElementById('RtcDateBox1').value + '/' + document.getElementById('RtcDateBox2').value + '/' + document.getElementById('RtcDateBox3').value + '  ' + '\n' +
+        'Week: ' + document.getElementById('RtcWeek').value + '  ' + '\n' +
+        'Time: ' + document.getElementById('RtcTimeBox1').value + ':' + document.getElementById('RtcTimeBox2').value + ':' + document.getElementById('RtcTimeBox3').value + '  ' + '\n';
+      var xhr = new XMLHttpRequest();
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+          if (xhr.status === 200 && xhr.responseText === 'OK') {
+            upTime();
+          } else {
+            alert('Update RTC failed');
+          }
+        }
+      };
+      xhr.open('GET', '/SetRtcTime?data=' + encodeURIComponent(WebData) + '&_=' + Date.now(), true);
+      xhr.send();
+    }
+    function DisplayRtcConfig() {
+      var RtcConfigDiv = document.getElementById('RtcTimeConfig');
+      RtcConfigDiv.style.display = (RtcConfigDiv.style.display === 'none' || RtcConfigDiv.style.display === '') ? 'block' : 'none';
+    }
+    function DisplayCycleDuration() {
+      var CycleBoxDiv = document.getElementById('CycleBox1').value;
+      var cycleDurationDiv = document.getElementById('CycleDuration');
+      cycleDurationDiv.style.display = (CycleBoxDiv === '1' || CycleBoxDiv === '2' || CycleBoxDiv === '3' || CycleBoxDiv === '4') ? 'block' : 'none';
+    }
+    var refreshInterval = 400;
+    setInterval(upTime, refreshInterval);
+    setInterval(DisplayCycleDuration, refreshInterval);
+    setInterval(toggleCANFrame, refreshInterval);
+  </script>
+  <div class="header"><h1>ESP32-S3-CAN-2CH</h1></div>
+  <nav>
+    <a href="/" id="SerialControlLink" class="SerialControlActive">Serial Control</a>
+    <a href="/RTC_Event" id="rtcEventLink" class="rtcEventActive">RTC Event</a>
+  </nav>
+  <div class="container">
+    <div class="form-group">
+      <label for="Date">Date:(example:2024/12/20)</label>
+      <input type="text" id="DateBox1" style="width: 50px;" value="2024">
+      <span>/</span>
+      <input type="text" id="DateBox2" style="width: 50px;" value="12">
+      <span>/</span>
+      <input type="text" id="DateBox3" style="width: 50px;" value="20">
+      <span>&nbsp;&nbsp;&nbsp;</span>
+      <select id="Week" style="width: 150px;">
+        <option value="1">Monday</option>
+        <option value="2">Tuesday</option>
+        <option value="3">Wednesday</option>
+        <option value="4">Thursday</option>
+        <option value="5">Friday</option>
+        <option value="6">Saturday</option>
+        <option value="0">Sunday</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="Time">Time:(example:16:51:21)</label>
+      <input type="text" id="TimeBox1" style="width: 50px;" value="0">
+      <span>:</span>
+      <input type="text" id="TimeBox2" style="width: 50px;" value="0">
+      <span>:</span>
+      <input type="text" id="TimeBox3" style="width: 50px;" value="0">
+    </div>
+    <div class="form-group">
+      <label for="SerialBox">SerialPort:</label>
+      <select id="SerialPort" style="width: 200px; text-align: left;">
+        <option value="0">CAN CH2 Send</option>
+        <option value="1">CAN CH1 Send</option>
+      </select>
+    </div>
+    <div class="form-group" id="CANFrame" style="display:block;">
+      <label for="CAN">CAN frame information:</label>
+      <span>CAN ID :0x</span>
+      <input type="text" id="CANid" style="width: 160px; text-align: left;" value="00000000">
+      <select id="CANextd" style="width: 200px; text-align: left;">
+        <option value="0">Standard frames</option>
+        <option value="1">Extended frames</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="SendDate">Data:(hex bytes)</label>
+      <input type="text" id="SerialData" style="width: 500px; text-align: left;" value="12" oninput="handleSerialInput(this)">
+      <span><br></span>
+      <select id="DataType" style="width: 120px; text-align: left;" disabled>
+        <option value="1" selected>hex</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="cycleBox">Cycle:</label>
+      <div style="display: flex; align-items: center; gap: 10px; margin-top: 5px;">
+        <input type="text" id="CycleDuration" style="width: 100px; display:none;" value="100">
+        <select id="CycleBox1" style="width: 150px; text-align: left;">
+          <option value="0">Aperiodicity</option>
+          <option value="1">Milliseconds</option>
+          <option value="2">Seconds</option>
+          <option value="3">Minutes</option>
+          <option value="4">Hours</option>
+          <option value="5">Everyday</option>
+          <option value="6">Weekly</option>
+          <option value="7">Monthly</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <button class="btn" id="NewEvent" onclick="getRtcEventData()">New Event</button>
+    </div>
+  </div>
+  <div class="container" id="RtcTimeConfig" style="display:none;">
+    <div class="form-group">
+      <label for="Date">Date:(example:2024/12/20)</label>
+      <input type="text" id="RtcDateBox1" style="width: 50px;" value="2024">
+      <span>/</span>
+      <input type="text" id="RtcDateBox2" style="width: 50px;" value="12">
+      <span>/</span>
+      <input type="text" id="RtcDateBox3" style="width: 50px;" value="20">
+      <span>&nbsp;&nbsp;&nbsp;</span>
+      <select id="RtcWeek" style="width: 150px;">
+        <option value="1">Monday</option>
+        <option value="2">Tuesday</option>
+        <option value="3">Wednesday</option>
+        <option value="4">Thursday</option>
+        <option value="5">Friday</option>
+        <option value="6">Saturday</option>
+        <option value="0">Sunday</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="Time">Time:(example:16:51:21)</label>
+      <input type="text" id="RtcTimeBox1" style="width: 50px;" value="0">
+      <span>:</span>
+      <input type="text" id="RtcTimeBox2" style="width: 50px;" value="0">
+      <span>:</span>
+      <input type="text" id="RtcTimeBox3" style="width: 50px;" value="0">
+    </div>
+    <div class="form-group">
+      <button class="btn" id="UpDateTime" style="margin-right: 50px;" onclick="UpDataRtcTime()">UpDate Time</button>
+    </div>
+  </div>
+  <div class="container">
+    <div class="form-group">
+      <span id="Time" style="margin-right: 20px;"></span>
+      <button id="RtcConfig" onclick="DisplayRtcConfig()">RTC Config</button>
+    </div>
+    <div class="Events">
+      <ul id="myList"></ul>
+    </div>
+  </div>
+</body>
+</html>
