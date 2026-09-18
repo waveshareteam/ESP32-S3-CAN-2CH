@@ -2,7 +2,7 @@
 
 [中文](README_ZH.md)
 
-The ESP32-S3-CAN-2CH is a low-cost, high-performance dual-channel CAN microcontroller development board designed by Waveshare. It integrates an ESP32-S3R8, two isolated CAN interfaces, RTC, USB Type-C, UART, and a 20-pin expansion header, making it suitable for CAN bus debugging, industrial communication, automotive electronics, and IoT gateway applications.
+The ESP32-S3-CAN-2CH is an industrial-grade Wi-Fi wireless communication device based on the ESP32-S3 microcontroller, supporting interfaces such as Wi-Fi, Bluetooth, and CAN. It features built-in protection circuits—including power isolation and optocoupler isolation—ensuring enhanced safety, stability, and reliability, making it suitable for AIoT applications.
 
 - [Purchase Link](https://www.waveshare.com/esp32-s3-can-2ch.htm)
 - [Documentation](https://docs.waveshare.com/ESP32-S3-CAN-2CH)

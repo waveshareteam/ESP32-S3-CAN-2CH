@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-ESP32-S3-CAN-2CH 是一款微雪 (Waveshare) 设计的低成本、高性能双路 CAN 微控制器开发板。板载两路隔离 CAN 接口、RTC、USB Type-C、UART 与 20Pin 扩展接口，适合 CAN 总线调试、工业通信、车载电子和物联网网关等场景。
+ESP32-S3-CAN-2CH 是一款基于 ESP32-S3 主控，支持 Wi-Fi、蓝牙、CAN 等外设接口的工业级 Wi-Fi 无线通信器。内置电源隔离、光耦隔离等保护电路，安全稳定更可靠，适用于 AIoT 领域。 
 
 - [购买链接](https://www.waveshare.net/shop/ESP32-S3-CAN-2CH.htm)
 - [产品文档](https://docs.waveshare.net/ESP32-S3-CAN-2CH/)
